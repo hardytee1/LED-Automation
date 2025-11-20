@@ -8,4 +8,5 @@ dependencies = [
     "langchain-docling>=2.0.0",
     "langchain-experimental>=0.4.0",
     "langchain-huggingface>=1.0.1",
+    "qdrant-client==1.14.1",
 ]

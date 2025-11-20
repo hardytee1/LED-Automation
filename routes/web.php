@@ -22,6 +22,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('reports', ReportController::class)->only(['index', 'create', 'store', 'show']);
     Route::post('reports/{report}/reference-batches', [ReferenceBatchController::class, 'store'])
         ->name('reports.reference-batches.store');
+    Route::post('reports/{report}/reference-batches/{referenceBatch}/queue', [ReferenceBatchController::class, 'queue'])
+        ->name('reports.reference-batches.queue');
     Route::post('reports/{report}/generation-runs', [GenerationRunController::class, 'store'])
         ->name('reports.generation-runs.store');
 });

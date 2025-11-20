@@ -10,6 +10,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ProcessReferenceBatch implements ShouldQueue
 {
@@ -32,9 +33,13 @@ class ProcessReferenceBatch implements ShouldQueue
     {
         $this->batch->update(['status' => 'processing']);
 
-        // Construct the absolute path for the Python service
+        // Resolve absolute path using the configured filesystem disk root
         $relativePath = ltrim((string) $this->batch->storage_path, '/');
-        $absolutePath = storage_path('app/' . $relativePath);
+        $disk = config('filesystems.default', 'local');
+        $storage = Storage::disk($disk);
+        $absolutePath = method_exists($storage, 'path')
+            ? $storage->path($relativePath)
+            : storage_path('app/'.$relativePath);
 
         if (!file_exists($absolutePath)) {
             $this->batch->update([

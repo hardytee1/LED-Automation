@@ -37,6 +37,22 @@ class ReferenceBatchController extends Controller
         return back()->with('flash.banner', 'Reference batch queued for parsing');
     }
 
+    public function queue(Request $request, Report $report, ReferenceBatch $referenceBatch): RedirectResponse
+    {
+        $this->authorizeReport($request->user()->id, $report);
+
+        abort_unless($referenceBatch->report_id === $report->id, 404);
+
+        $referenceBatch->update([
+            'status' => 'pending',
+            'notes' => null,
+        ]);
+
+        ProcessReferenceBatch::dispatch($referenceBatch);
+
+        return back()->with('flash.banner', 'Reference batch queued for parsing');
+    }
+
     protected function authorizeReport(int $userId, Report $report): void
     {
         abort_unless($report->user_id === $userId, 403);

@@ -50,17 +50,22 @@ embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
 semantic_chunker = SemanticChunker(embedding_model, breakpoint_threshold_type="percentile")
 qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
+try:
+    VECTOR_SIZE = len(embedding_model.embed_query("dimension probe"))
+except Exception as exc:  # pylint: disable=broad-except
+    raise RuntimeError("Failed to determine embedding vector size") from exc
+
 
 def ensure_collection() -> None:
     try:
         qdrant_client.get_collection(QDRANT_COLLECTION)
         logger.info("Using existing Qdrant collection '%s'", QDRANT_COLLECTION)
     except qdrant_exceptions.UnexpectedResponse:
-        logger.info("Creating Qdrant collection '%s' with vector size %s", QDRANT_COLLECTION, vector_size)
+        logger.info("Creating Qdrant collection '%s' with vector size %s", QDRANT_COLLECTION, VECTOR_SIZE)
         qdrant_client.recreate_collection(
             collection_name=QDRANT_COLLECTION,
             vectors_config=qdrant_models.VectorParams(
-                size=vector_size,
+                size=VECTOR_SIZE,
                 distance=getattr(qdrant_models.Distance, QDRANT_DISTANCE, qdrant_models.Distance.COSINE),
             ),
         )

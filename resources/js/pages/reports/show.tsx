@@ -14,7 +14,7 @@ import AppLayout from '@/layouts/app-layout';
 import reports from '@/routes/reports';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { type FormEvent, useMemo } from 'react';
+import { type FormEvent, useState } from 'react';
 
 interface Section {
     id: number;
@@ -93,29 +93,46 @@ export default function ReportShow({ report }: Props) {
     );
 
     const runForm = useForm<{ instructions: string }>({ instructions: '' });
+    const queueForm = useForm({});
+    const [queueingBatchId, setQueueingBatchId] = useState<number | null>(null);
 
     const handleReferenceSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        referenceForm
-            .transform((data) => ({
-                file: data.file,
-                notes: data.notes,
-            }))
-            .post(reports.referenceBatches.store({ report: report.id }).url, {
-                forceFormData: true,
-                onSuccess: () => referenceForm.reset('file', 'notes'),
-            });
+        referenceForm.transform((data) => ({
+            file: data.file,
+            notes: data.notes,
+        }));
+
+        referenceForm.post(reports.referenceBatches.store({ report: report.id }).url, {
+            forceFormData: true,
+            onSuccess: () => referenceForm.reset('file', 'notes'),
+        });
     };
 
     const handleRunSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        runForm
-            .transform((data) => ({
-                payload: data.instructions ? { instructions: data.instructions } : null,
-            }))
-            .post(reports.generationRuns.store({ report: report.id }).url, {
-                onSuccess: () => runForm.reset('instructions'),
-            });
+        runForm.transform((data) => ({
+            payload: data.instructions ? { instructions: data.instructions } : null,
+        }));
+
+        runForm.post(reports.generationRuns.store({ report: report.id }).url, {
+            onSuccess: () => runForm.reset('instructions'),
+        });
+    };
+
+    const handleQueueBatch = (batchId: number) => {
+        if (queueForm.processing) {
+            return;
+        }
+
+        queueForm.post(
+            reports.referenceBatches.queue({ report: report.id, referenceBatch: batchId }).url,
+            {
+                preserveScroll: true,
+                onStart: () => setQueueingBatchId(batchId),
+                onFinish: () => setQueueingBatchId(null),
+            }
+        );
     };
 
     return (
@@ -253,20 +270,37 @@ export default function ReportShow({ report }: Props) {
                                 {report.reference_batches.length === 0 && (
                                     <p className="text-sm text-muted-foreground">No uploads yet.</p>
                                 )}
-                                {report.reference_batches.map((batch) => (
-                                    <div key={batch.id} className="rounded-lg border p-4">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <p className="font-semibold">{batch.source_filename ?? 'Batch #' + batch.id}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Submitted {formatDateTime(batch.submitted_at)} by{' '}
-                                                    {batch.uploaded_by?.name ?? 'Unknown'}
-                                                </p>
+                                {report.reference_batches.map((batch) => {
+                                    const isActive = ['pending', 'processing'].includes(batch.status);
+                                    const isQueueing = queueForm.processing && queueingBatchId === batch.id;
+
+                                    return (
+                                        <div key={batch.id} className="rounded-lg border p-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="font-semibold">{batch.source_filename ?? 'Batch #' + batch.id}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Submitted {formatDateTime(batch.submitted_at)} by{' '}
+                                                        {batch.uploaded_by?.name ?? 'Unknown'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge className={statusClass(batch.status)} variant="outline">
+                                                        {batch.status}
+                                                    </Badge>
+                                                    {!isActive && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={isQueueing}
+                                                            onClick={() => handleQueueBatch(batch.id)}
+                                                        >
+                                                            {isQueueing ? 'Queueing…' : 'Queue batch'}
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <Badge className={statusClass(batch.status)} variant="outline">
-                                                {batch.status}
-                                            </Badge>
-                                        </div>
                                         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                                             <div className="rounded-md bg-muted/40 p-2 text-center">
                                                 <p className="text-xl font-semibold">{batch.total_references}</p>
@@ -277,11 +311,12 @@ export default function ReportShow({ report }: Props) {
                                                 <p className="text-xs text-muted-foreground">Processed</p>
                                             </div>
                                         </div>
-                                        {batch.notes && (
-                                            <p className="mt-2 text-sm text-muted-foreground">{batch.notes}</p>
-                                        )}
-                                    </div>
-                                ))}
+                                            {batch.notes && (
+                                                <p className="mt-2 text-sm text-muted-foreground">{batch.notes}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>
