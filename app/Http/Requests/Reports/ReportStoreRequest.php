@@ -16,7 +16,6 @@ class ReportStoreRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'program_name' => ['nullable', 'string', 'max:255'],
-            'accreditation_level' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
         ];
     }

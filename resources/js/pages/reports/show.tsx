@@ -85,21 +85,14 @@ export default function ReportShow({ report }: Props) {
         { title: report.name, href: reports.show({ report: report.id }).url },
     ];
 
-    const referenceForm = useForm<{ file: File | null; notes: string; total_references: string }>(
+    const referenceForm = useForm<{ file: File | null; notes: string }>(
         {
             file: null,
             notes: '',
-            total_references: '',
         }
     );
 
     const runForm = useForm<{ instructions: string }>({ instructions: '' });
-
-    const accreditationLevel = useMemo(() => {
-        return typeof report.metadata?.accreditation_level === 'string'
-            ? report.metadata?.accreditation_level
-            : '—';
-    }, [report.metadata?.accreditation_level]);
 
     const handleReferenceSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -107,11 +100,10 @@ export default function ReportShow({ report }: Props) {
             .transform((data) => ({
                 file: data.file,
                 notes: data.notes,
-                total_references: data.total_references,
             }))
             .post(reports.referenceBatches.store({ report: report.id }).url, {
                 forceFormData: true,
-                onSuccess: () => referenceForm.reset('file', 'notes', 'total_references'),
+                onSuccess: () => referenceForm.reset('file', 'notes'),
             });
     };
 
@@ -165,15 +157,6 @@ export default function ReportShow({ report }: Props) {
                             <div className="text-3xl font-semibold">{report.sections.length}</div>
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Accreditation level</CardTitle>
-                            <CardDescription>Target BAN-PT score</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-semibold">{accreditationLevel}</div>
-                        </CardContent>
-                    </Card>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
@@ -225,29 +208,16 @@ export default function ReportShow({ report }: Props) {
                         <CardContent>
                             <form className="space-y-4" onSubmit={handleReferenceSubmit}>
                                 <div className="space-y-2">
-                                    <Label htmlFor="reference-file">Reference file</Label>
+                                    <Label htmlFor="reference-file">Reference file (ZIP)</Label>
                                     <Input
                                         id="reference-file"
                                         type="file"
+                                        accept=".zip"
                                         onChange={(event) =>
                                             referenceForm.setData('file', event.currentTarget.files?.[0] ?? null)
                                         }
                                     />
                                     <InputError message={referenceForm.errors.file} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="reference-count">Total references</Label>
-                                    <Input
-                                        id="reference-count"
-                                        type="number"
-                                        min="0"
-                                        value={referenceForm.data.total_references}
-                                        onChange={(event) =>
-                                            referenceForm.setData('total_references', event.target.value)
-                                        }
-                                    />
-                                    <InputError message={referenceForm.errors.total_references} />
                                 </div>
 
                                 <div className="space-y-2">
@@ -297,20 +267,14 @@ export default function ReportShow({ report }: Props) {
                                                 {batch.status}
                                             </Badge>
                                         </div>
-                                        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                                             <div className="rounded-md bg-muted/40 p-2 text-center">
                                                 <p className="text-xl font-semibold">{batch.total_references}</p>
-                                                <p className="text-xs text-muted-foreground">Total</p>
+                                                <p className="text-xs text-muted-foreground">Total Found</p>
                                             </div>
                                             <div className="rounded-md bg-muted/40 p-2 text-center">
                                                 <p className="text-xl font-semibold">{batch.processed_references}</p>
                                                 <p className="text-xs text-muted-foreground">Processed</p>
-                                            </div>
-                                            <div className="rounded-md bg-muted/40 p-2 text-center">
-                                                <p className="text-xl font-semibold">
-                                                    {Math.max(batch.total_references - batch.processed_references, 0)}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">Remaining</p>
                                             </div>
                                         </div>
                                         {batch.notes && (

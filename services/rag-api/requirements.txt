@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+qdrant-client
+sentence-transformers
+langchain-text-splitters
+langchain-community
+docling
+docling-core
+pypdf
+httpx
+langchain_docling
+langchain_experimental
+langchain_huggingface

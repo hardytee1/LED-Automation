@@ -26,7 +26,6 @@ it('stores a new report with default metadata', function () {
     actingAs($user)->post(route('reports.store'), [
         'name' => 'LED Farmasi',
         'program_name' => 'Farmasi S1',
-        'accreditation_level' => 'Unggul',
     ])->assertRedirect();
 
     $this->assertDatabaseHas('reports', [

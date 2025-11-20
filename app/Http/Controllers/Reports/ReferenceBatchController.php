@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessReferenceBatch;
 use App\Http\Requests\Reports\ReferenceBatchStoreRequest;
 use App\Models\ReferenceBatch;
 use App\Models\Report;
@@ -18,18 +19,20 @@ class ReferenceBatchController extends Controller
         $file = $request->file('file');
         $path = $file ? $file->store('reference-batches') : null;
 
-        ReferenceBatch::create([
+        $batch = ReferenceBatch::create([
             'report_id' => $report->id,
             'uploaded_by' => $request->user()->id,
             'source_filename' => $file?->getClientOriginalName() ?? $request->input('source_filename'),
             'storage_path' => $path,
-            'total_references' => $request->validated('total_references') ?? 0,
+            'total_references' => 0, // Will be updated by Python service
             'processed_references' => 0,
             'status' => 'pending',
             'notes' => $request->validated('notes'),
             'metadata' => $request->validated('metadata'),
             'submitted_at' => now(),
         ]);
+
+        ProcessReferenceBatch::dispatch($batch);
 
         return back()->with('flash.banner', 'Reference batch queued for parsing');
     }

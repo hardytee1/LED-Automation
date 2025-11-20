@@ -14,10 +14,9 @@ class ReferenceBatchStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['nullable', 'file', 'max:20480'],
+            'file' => ['required', 'file', 'mimes:zip', 'max:51200'], // Max 50MB
             'source_filename' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
-            'total_references' => ['nullable', 'integer', 'min:0'],
             'metadata' => ['nullable', 'array'],
         ];
     }

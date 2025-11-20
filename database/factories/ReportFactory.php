@@ -25,9 +25,7 @@ class ReportFactory extends Factory
             'automation_job_id' => null,
             'last_generated_at' => null,
             'last_error' => null,
-            'metadata' => [
-                'accreditation_level' => $this->faker->randomElement(['A', 'B', 'Unggul']),
-            ],
+            'metadata' => [],
         ];
     }
 }

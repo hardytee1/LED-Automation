@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'rag' => [
+        'url' => env('RAG_SERVICE_URL', 'http://127.0.0.1:8000'),
+        'webhook_token' => env('RAG_WEBHOOK_TOKEN'),
+    ],
+
 ];

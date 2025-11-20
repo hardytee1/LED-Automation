@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Reports\GenerationRunController;
 use App\Http\Controllers\Reports\ReferenceBatchController;
+use App\Http\Controllers\Reports\ReferenceBatchStatusController;
 use App\Http\Controllers\Reports\ReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -24,5 +25,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('reports/{report}/generation-runs', [GenerationRunController::class, 'store'])
         ->name('reports.generation-runs.store');
 });
+
+Route::post('rag/webhooks/reference-batches', ReferenceBatchStatusController::class)
+    ->name('rag.webhooks.reference-batches');
 
 require __DIR__.'/settings.php';

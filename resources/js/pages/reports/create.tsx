@@ -11,7 +11,6 @@ import { type FormEvent } from 'react';
 interface FormData {
     name: string;
     program_name: string;
-    accreditation_level: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -23,13 +22,12 @@ export default function ReportCreate() {
     const form = useForm<FormData>({
         name: '',
         program_name: '',
-        accreditation_level: '',
     });
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         form.post(reports.store().url, {
-            onSuccess: () => form.reset('name', 'program_name', 'accreditation_level'),
+            onSuccess: () => form.reset('name', 'program_name'),
         });
     };
 
@@ -71,22 +69,6 @@ export default function ReportCreate() {
                             placeholder="Teknik Informatika S1"
                         />
                         <InputError message={form.errors.program_name} />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="accreditation_level">Accreditation level</Label>
-                        <select
-                            id="accreditation_level"
-                            value={form.data.accreditation_level}
-                            onChange={(e) => form.setData('accreditation_level', e.target.value)}
-                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">Select level</option>
-                            <option value="Unggul">Unggul</option>
-                            <option value="Baik Sekali">Baik Sekali</option>
-                            <option value="Baik">Baik</option>
-                        </select>
-                        <InputError message={form.errors.accreditation_level} />
                     </div>
 
                     <div className="flex gap-3">

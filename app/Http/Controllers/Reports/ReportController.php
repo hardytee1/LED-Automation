@@ -52,7 +52,6 @@ class ReportController extends Controller
             'status' => 'draft',
             'program_name' => $data['program_name'] ?? null,
             'metadata' => array_filter([
-                'accreditation_level' => $data['accreditation_level'] ?? null,
                 ...($data['metadata'] ?? []),
             ]),
         ]);
