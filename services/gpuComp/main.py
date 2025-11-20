@@ -80,18 +80,40 @@ def extract_zip(zip_path: Path) -> Path:
     return workdir
 
 
+SUPPORTED_DOC_EXTENSIONS = {".pdf", ".xlsx", ".csv", ".csx", ".pptx"}
+
+
 def load_documents(root: Path) -> List[Document]:
     documents: List[Document] = []
-    for file_path in root.rglob("*.pdf"):
-        loader = DoclingLoader(
-            file_path=str(file_path),
-            export_type=ExportType.DOC_CHUNKS,
-            chunker=HybridChunker(tokenizer=EMBEDDING_MODEL_NAME),
-        )
-        loaded = loader.load()
+    document_paths = [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in SUPPORTED_DOC_EXTENSIONS
+    ]
+
+    if not document_paths:
+        logger.warning("No supported documents found in %s", root)
+        return documents
+
+    for file_path in document_paths:
+        logger.info("Processing reference file: %s", file_path)
+        try:
+            loader = DoclingLoader(
+                file_path=str(file_path),
+                export_type=ExportType.DOC_CHUNKS,
+                chunker=HybridChunker(tokenizer=EMBEDDING_MODEL_NAME),
+            )
+            loaded = loader.load()
+            logger.info("  - Created %d hybrid chunks.", len(loaded))
+        except Exception as exc:
+            logger.exception("  - ERROR processing file %s: %s", file_path, exc)
+            continue
+
         for doc in loaded:
             doc.metadata = {**doc.metadata, "source": str(file_path)}
         documents.extend(loaded)
+
+    logger.info("Total chunks generated: %d", len(documents))
     return documents
 
 
@@ -122,7 +144,7 @@ async def ingest(
         workdir = extract_zip(archive_path)
         documents = load_documents(workdir)
         if not documents:
-            raise HTTPException(status_code=400, detail="No PDF documents found")
+            raise HTTPException(status_code=400, detail="No supported documents found")
 
         vectorstore = Qdrant(
             client=qdrant_client,

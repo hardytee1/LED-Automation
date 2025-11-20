@@ -61,6 +61,8 @@ class ProcessReferenceBatch implements ShouldQueue
                 $request = $request->withToken($token);
             }
 
+            $request = $request->asMultipart();
+
             $fileHandle = fopen($absolutePath, 'rb');
             if ($fileHandle === false) {
                 throw new \RuntimeException('Unable to open reference archive for streaming.');
