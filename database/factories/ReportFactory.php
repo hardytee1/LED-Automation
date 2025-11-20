@@ -19,6 +19,7 @@ class ReportFactory extends Factory
             'user_id' => User::factory(),
             'name' => $name,
             'slug' => Str::slug($name.'-'.Str::random(5)),
+            'uuid' => (string) Str::uuid(),
             'status' => $this->faker->randomElement(['draft', 'running', 'completed', 'failed']),
             'program_name' => $this->faker->company().' '.$this->faker->randomElement(['S1', 'S2', 'S3']),
             'output_path' => null,

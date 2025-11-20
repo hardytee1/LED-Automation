@@ -2,9 +2,9 @@ import logging
 import os
 import shutil
 import tempfile
-import uuid
 from pathlib import Path
 from typing import List
+from uuid import UUID
 from zipfile import BadZipFile, ZipFile
 
 import httpx
@@ -32,7 +32,6 @@ app = FastAPI(title="LED Automation RAG API")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "led_reference_chunks")
 QDRANT_DISTANCE = os.getenv("QDRANT_DISTANCE", "COSINE").upper()
 STATUS_WEBHOOK = os.getenv("STATUS_WEBHOOK_URL")
 STATUS_WEBHOOK_TOKEN = os.getenv("STATUS_WEBHOOK_TOKEN")
@@ -50,14 +49,14 @@ except Exception as exc:  # pylint: disable=broad-except
     raise RuntimeError("Failed to determine embedding vector size") from exc
 
 
-def ensure_collection() -> None:
+def ensure_collection(collection_name: str) -> None:
     try:
-        qdrant_client.get_collection(QDRANT_COLLECTION)
-        logger.info("Using existing Qdrant collection '%s'", QDRANT_COLLECTION)
+        qdrant_client.get_collection(collection_name)
+        logger.info("Using existing Qdrant collection '%s'", collection_name)
     except qdrant_exceptions.UnexpectedResponse:
-        logger.info("Creating Qdrant collection '%s' with vector size %s", QDRANT_COLLECTION, VECTOR_SIZE)
+        logger.info("Creating Qdrant collection '%s' with vector size %s", collection_name, VECTOR_SIZE)
         qdrant_client.recreate_collection(
-            collection_name=QDRANT_COLLECTION,
+            collection_name=collection_name,
             vectors_config=qdrant_models.VectorParams(
                 size=VECTOR_SIZE,
                 distance=getattr(qdrant_models.Distance, QDRANT_DISTANCE, qdrant_models.Distance.COSINE),
@@ -119,11 +118,11 @@ def notify_status(batch_id: int, status: str, details: dict | None = None) -> No
 class IngestRequest(BaseModel):
     file_path: str
     batch_id: int
-    report_id: int
+    report_uuid: str
 
 
-def process_reference_batch(file_path: str, batch_id: int, report_id: int) -> None:
-    ensure_collection()
+def process_reference_batch(file_path: str, batch_id: int, report_uuid: str) -> None:
+    ensure_collection(report_uuid)
     archive_path = Path(file_path)
     if not archive_path.exists():
         raise RuntimeError(f"File not found: {file_path}")
@@ -137,14 +136,14 @@ def process_reference_batch(file_path: str, batch_id: int, report_id: int) -> No
 
         vectorstore = Qdrant(
             client=qdrant_client,
-            collection_name=QDRANT_COLLECTION,
+            collection_name=report_uuid,
             embeddings=embedding_model,
         )
         vectorstore.add_documents(documents)
-        notify_status(batch_id, "completed", {"chunks": len(documents)})
+        notify_status(batch_id, "completed", {"chunks": len(documents), "collection": report_uuid})
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Batch %s failed", batch_id)
-        notify_status(batch_id, "failed", {"error": str(exc)})
+        notify_status(batch_id, "failed", {"error": str(exc), "collection": report_uuid})
     finally:
         cleanup_directory(working_dir)
 
@@ -155,7 +154,12 @@ async def ingest_batch(request: IngestRequest, background_tasks: BackgroundTasks
     if not archive_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found at path: {archive_path}")
 
-    background_tasks.add_task(process_reference_batch, str(archive_path), request.batch_id, request.report_id)
+    try:
+        normalized_uuid = str(UUID(request.report_uuid))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid report_uuid") from exc
+
+    background_tasks.add_task(process_reference_batch, str(archive_path), request.batch_id, normalized_uuid)
     return {"status": "processing_started", "file_path": str(archive_path)}
 
 

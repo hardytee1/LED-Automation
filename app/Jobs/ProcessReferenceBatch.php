@@ -31,7 +31,19 @@ class ProcessReferenceBatch implements ShouldQueue
      */
     public function handle(): void
     {
+        $this->batch->loadMissing('report');
+
         $this->batch->update(['status' => 'processing']);
+
+        $reportUuid = $this->batch->report?->uuid;
+        if (empty($reportUuid)) {
+            $this->batch->update([
+                'status' => 'failed',
+                'notes' => 'Report UUID is missing; cannot route GPU ingest.',
+            ]);
+            Log::error('Missing report UUID for batch {batch}', ['batch' => $this->batch->id]);
+            return;
+        }
 
         // Resolve absolute path using the configured filesystem disk root
         $relativePath = ltrim((string) $this->batch->storage_path, '/');
@@ -73,7 +85,7 @@ class ProcessReferenceBatch implements ShouldQueue
                     ->attach('archive', $fileHandle, basename($absolutePath))
                     ->post("{$gpuServiceUrl}/ingest", [
                         'batch_id' => $this->batch->id,
-                        'report_id' => $this->batch->report_id,
+                        'report_uuid' => $reportUuid,
                     ]);
             } finally {
                 if (is_resource($fileHandle)) {
@@ -111,7 +123,7 @@ class ProcessReferenceBatch implements ShouldQueue
 
             Log::info('Batch {batch} ingested on GPU service.', [
                 'batch' => $this->batch->id,
-                'report_id' => $this->batch->report_id,
+                'report_uuid' => $reportUuid,
                 'chunks' => $chunks,
             ]);
         } catch (\Exception $e) {

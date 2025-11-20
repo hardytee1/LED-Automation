@@ -4,6 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import List
+from uuid import UUID
 from zipfile import BadZipFile, ZipFile
 
 import httpx
@@ -28,7 +29,6 @@ app = FastAPI(title="GPU Embedding Service")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "denaya/indosbert-large")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "cova_led_reference_chunks")
 QDRANT_DISTANCE = os.getenv("QDRANT_DISTANCE", "COSINE").upper()
 
 if not QDRANT_URL or not QDRANT_API_KEY:
@@ -40,12 +40,12 @@ qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 VECTOR_SIZE = len(embedding_model.embed_query("dimension probe"))
 
 
-def ensure_collection() -> None:
+def ensure_collection(collection_name: str) -> None:
     try:
-        qdrant_client.get_collection(QDRANT_COLLECTION)
+        qdrant_client.get_collection(collection_name)
     except Exception:
         qdrant_client.recreate_collection(
-            collection_name=QDRANT_COLLECTION,
+            collection_name=collection_name,
             vectors_config=qdrant_models.VectorParams(
                 size=VECTOR_SIZE,
                 distance=getattr(qdrant_models.Distance, QDRANT_DISTANCE, qdrant_models.Distance.COSINE),
@@ -134,10 +134,15 @@ async def persist_upload(upload: UploadFile) -> Path:
 @app.post("/ingest")
 async def ingest(
     batch_id: int = Form(...),
-    report_id: int = Form(...),
+    report_uuid: str = Form(...),
     archive: UploadFile = File(...),
 ):
-    ensure_collection()
+    try:
+        normalized_uuid = str(UUID(report_uuid))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid report_uuid") from exc
+
+    ensure_collection(normalized_uuid)
     archive_path = await persist_upload(archive)
     workdir: Path | None = None
     try:
@@ -148,11 +153,11 @@ async def ingest(
 
         vectorstore = Qdrant(
             client=qdrant_client,
-            collection_name=QDRANT_COLLECTION,
+            collection_name=normalized_uuid,
             embeddings=embedding_model,
         )
         vectorstore.add_documents(documents)
-        return {"chunks": len(documents)}
+        return {"chunks": len(documents), "collection": normalized_uuid}
     finally:
         if workdir:
             cleanup_directory(workdir)
