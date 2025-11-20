@@ -51,26 +51,57 @@ class ProcessReferenceBatch implements ShouldQueue
         }
 
         try {
-            // Call the Python RAG Service
-            // Ideally, put the URL in config/services.php or .env
-            $ragServiceUrl = config('services.rag.url', 'http://127.0.0.1:8000');
-            
-            $response = Http::post("{$ragServiceUrl}/ingest", [
+            $gpuConfig = config('services.gpu', []);
+            $gpuServiceUrl = rtrim((string) data_get($gpuConfig, 'url', config('services.rag.url', 'http://127.0.0.1:8000')), '/');
+            $timeout = (int) data_get($gpuConfig, 'timeout', 120);
+            $token = data_get($gpuConfig, 'token');
+
+            $request = Http::timeout(max($timeout, 30))->acceptJson();
+            if (!empty($token)) {
+                $request = $request->withToken($token);
+            }
+
+            $payload = [
                 'file_path' => $absolutePath,
                 'batch_id' => $this->batch->id,
                 'report_id' => $this->batch->report_id,
-            ]);
+            ];
 
-            if ($response->successful()) {
-                Log::info("Batch {$this->batch->id} sent to RAG service successfully.");
-                // Status remains 'processing' until the Python service updates it via webhook/callback
-            } else {
-                Log::error("Failed to send batch {$this->batch->id} to RAG service. Status: {$response->status()}, Body: {$response->body()}");
+            $response = $request->post("{$gpuServiceUrl}/ingest", $payload);
+
+            if ($response->failed()) {
+                Log::error(
+                    'GPU ingest failed for batch {batch} with status {status}: {body}',
+                    [
+                        'batch' => $this->batch->id,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ],
+                );
+
                 $this->batch->update([
                     'status' => 'failed',
-                    'notes' => 'RAG Service Error: ' . $response->status()
+                    'notes' => 'GPU ingest service error: '.$response->status(),
                 ]);
+
+                return;
             }
+
+            $chunks = data_get($response->json(), 'chunks');
+
+            $this->batch->update([
+                'status' => 'completed',
+                'processed_references' => is_numeric($chunks) ? (int) $chunks : $this->batch->processed_references,
+                'notes' => is_numeric($chunks)
+                    ? sprintf('GPU ingest complete (%d chunks).', (int) $chunks)
+                    : 'GPU ingest completed.',
+            ]);
+
+            Log::info('Batch {batch} ingested on GPU service.', [
+                'batch' => $this->batch->id,
+                'report_id' => $this->batch->report_id,
+                'chunks' => $chunks,
+            ]);
         } catch (\Exception $e) {
             Log::error("Exception processing batch {$this->batch->id}: " . $e->getMessage());
             $this->batch->update([

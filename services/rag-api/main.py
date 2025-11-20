@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Iterable, List
+from typing import List
 from zipfile import BadZipFile, ZipFile
 
 import httpx
@@ -12,15 +12,15 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from langchain_docling import DoclingLoader
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel
 from langchain_community.vectorstores import Qdrant
+from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import exceptions as qdrant_exceptions
 from qdrant_client.http import models as qdrant_models
-from langchain_experimental.text_splitter import SemanticChunker
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import SentenceTransformer
+from docling_core.types import ExportType
+from docling.chunking import HybridChunker
 
 load_dotenv()
 
@@ -29,16 +29,11 @@ logger = logging.getLogger("rag-api")
 
 app = FastAPI(title="LED Automation RAG API")
 
-SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
-
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "led_reference_chunks")
 QDRANT_DISTANCE = os.getenv("QDRANT_DISTANCE", "COSINE").upper()
-BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "32"))
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 STATUS_WEBHOOK = os.getenv("STATUS_WEBHOOK_URL")
 STATUS_WEBHOOK_TOKEN = os.getenv("STATUS_WEBHOOK_TOKEN")
 
@@ -47,7 +42,6 @@ if not QDRANT_URL or not QDRANT_API_KEY:
 
 embedding_model_name = "denaya/indosbert-large"
 embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
-semantic_chunker = SemanticChunker(embedding_model, breakpoint_threshold_type="percentile")
 qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
 try:
@@ -89,80 +83,25 @@ def extract_zip(zip_path: Path) -> Path:
     return workdir
 
 
-def discover_documents(root: Path) -> List[Path]:
-    return [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS]
-
-
-def chunk_pdf(path: Path) -> List[Document]:
-    loader = DoclingLoader(file_path=str(path))
-    docs = loader.load()
-    for doc in docs:
-        doc.metadata = {**doc.metadata, "source": str(path)}
-    return docs
-
-
-def chunk_text(path: Path, splitter: RecursiveCharacterTextSplitter) -> List[Document]:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        content = path.read_text(encoding="latin-1", errors="ignore")
-    chunks = splitter.split_text(content)
-    return [Document(page_content=chunk, metadata={"source": str(path)}) for chunk in chunks]
-
-
-def build_chunks(documents: Iterable[Path]) -> List[Document]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        length_function=len,
-    )
-    all_docs: List[Document] = []
-    for doc_path in documents:
+def load_reference_documents(root: Path) -> List[Document]:
+    documents: List[Document] = []
+    for file_path in root.rglob("*"):
+        if not file_path.is_file() or file_path.suffix.lower() != ".pdf":
+            continue
         try:
-            if doc_path.suffix.lower() == ".pdf":
-                parts = chunk_pdf(doc_path)
-            else:
-                parts = chunk_text(doc_path, splitter)
-            all_docs.extend(parts)
-            logger.info("Chunked %s into %s segments", doc_path.name, len(parts))
+            loader = DoclingLoader(
+                file_path=str(file_path),
+                export_type=ExportType.DOC_CHUNKS,
+                chunker=HybridChunker(tokenizer=embedding_model_name),
+            )
+            loaded = loader.load()
+            for doc in loaded:
+                doc.metadata = {**doc.metadata, "source": str(file_path)}
+            documents.extend(loaded)
+            logger.info("Processed %s -> %s chunks", file_path.name, len(loaded))
         except Exception as exc:  # pylint: disable=broad-except
-            logger.error("Failed to chunk %s: %s", doc_path, exc)
-    return all_docs
-
-
-def embed_chunks(docs: List[Document]) -> List[List[float]]:
-    texts = [doc.page_content for doc in docs if doc.page_content.strip()]
-    if not texts:
-        return []
-    embeddings = embedding_model.encode(
-        texts,
-        batch_size=BATCH_SIZE,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-    )
-    return embeddings.tolist()
-
-
-def upsert_chunks(docs: List[Document], vectors: List[List[float]], batch_id: int, report_id: int) -> None:
-    if not docs or not vectors:
-        logger.warning("No documents or vectors to upsert for batch %s", batch_id)
-        return
-    payloads = []
-    for doc in docs:
-        payloads.append(
-            {
-                "batch_id": batch_id,
-                "report_id": report_id,
-                "source": doc.metadata.get("source"),
-                "text": doc.page_content,
-            }
-        )
-    points = [
-        qdrant_models.PointStruct(id=uuid.uuid4().int >> 64, vector=vector, payload=payload)
-        for vector, payload in zip(vectors, payloads)
-    ]
-    qdrant_client.upsert(collection_name=QDRANT_COLLECTION, points=points)
-    logger.info("Upserted %s chunks for batch %s", len(points), batch_id)
+            logger.error("Failed to process %s: %s", file_path, exc)
+    return documents
 
 
 def notify_status(batch_id: int, status: str, details: dict | None = None) -> None:
@@ -192,17 +131,17 @@ def process_reference_batch(file_path: str, batch_id: int, report_id: int) -> No
     working_dir = extract_zip(archive_path)
     logger.info("Extracted ZIP to %s", working_dir)
     try:
-        documents = discover_documents(working_dir)
+        documents = load_reference_documents(working_dir)
         if not documents:
-            raise RuntimeError("No supported documents found in the archive")
-        chunks = build_chunks(documents)
-        if not chunks:
-            raise RuntimeError("Failed to create chunks from documents")
-        vectors = embed_chunks(chunks)
-        if not vectors:
-            raise RuntimeError("Embedding model returned no vectors")
-        upsert_chunks(chunks, vectors, batch_id, report_id)
-        notify_status(batch_id, "completed", {"chunks": len(chunks)})
+            raise RuntimeError("No PDF documents found in the archive")
+
+        vectorstore = Qdrant(
+            client=qdrant_client,
+            collection_name=QDRANT_COLLECTION,
+            embeddings=embedding_model,
+        )
+        vectorstore.add_documents(documents)
+        notify_status(batch_id, "completed", {"chunks": len(documents)})
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Batch %s failed", batch_id)
         notify_status(batch_id, "failed", {"error": str(exc)})

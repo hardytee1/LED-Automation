@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+qdrant-client
+langchain-docling
+docling-core
+langchain-community
+langchain-huggingface
+sentence-transformers
+httpx

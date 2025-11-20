@@ -40,4 +40,10 @@ return [
         'webhook_token' => env('RAG_WEBHOOK_TOKEN'),
     ],
 
+    'gpu' => [
+        'url' => env('GPU_SERVICE_URL', env('RAG_SERVICE_URL', 'http://127.0.0.1:8000')),
+        'token' => env('GPU_SERVICE_TOKEN'),
+        'timeout' => (int) env('GPU_SERVICE_TIMEOUT', 120),
+    ],
+
 ];
