@@ -61,13 +61,23 @@ class ProcessReferenceBatch implements ShouldQueue
                 $request = $request->withToken($token);
             }
 
-            $payload = [
-                'file_path' => $absolutePath,
-                'batch_id' => $this->batch->id,
-                'report_id' => $this->batch->report_id,
-            ];
+            $fileHandle = fopen($absolutePath, 'rb');
+            if ($fileHandle === false) {
+                throw new \RuntimeException('Unable to open reference archive for streaming.');
+            }
 
-            $response = $request->post("{$gpuServiceUrl}/ingest", $payload);
+            try {
+                $response = $request
+                    ->attach('archive', $fileHandle, basename($absolutePath))
+                    ->post("{$gpuServiceUrl}/ingest", [
+                        'batch_id' => $this->batch->id,
+                        'report_id' => $this->batch->report_id,
+                    ]);
+            } finally {
+                if (is_resource($fileHandle)) {
+                    fclose($fileHandle);
+                }
+            }
 
             if ($response->failed()) {
                 Log::error(

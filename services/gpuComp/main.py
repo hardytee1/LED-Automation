@@ -8,12 +8,11 @@ from zipfile import BadZipFile, ZipFile
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from langchain_docling import DoclingLoader
 from langchain_core.documents import Document
 from langchain_community.vectorstores import Qdrant
 from langchain_huggingface import HuggingFaceEmbeddings
-from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
 from langchain_docling.loader import ExportType
@@ -61,6 +60,15 @@ def cleanup_directory(path: Path) -> None:
         logger.warning("Failed cleanup %s: %s", path, exc)
 
 
+def cleanup_file(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        path.unlink()
+    except OSError as exc:
+        logger.warning("Failed file cleanup %s: %s", path, exc)
+
+
 def extract_zip(zip_path: Path) -> Path:
     workdir = Path(tempfile.mkdtemp(prefix="gpu-comp-"))
     try:
@@ -87,21 +95,31 @@ def load_documents(root: Path) -> List[Document]:
     return documents
 
 
-class IngestRequest(BaseModel):
-    file_path: str
-    batch_id: int
-    report_id: int
+async def persist_upload(upload: UploadFile) -> Path:
+    suffix = Path(upload.filename or "reference-batch.zip").suffix or ".zip"
+    fd, temp_path = tempfile.mkstemp(prefix="gpu-upload-", suffix=suffix)
+    path = Path(temp_path)
+    with os.fdopen(fd, "wb") as buffer:
+        while True:
+            chunk = await upload.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.write(chunk)
+    await upload.close()
+    return path
 
 
 @app.post("/ingest")
-async def ingest(request: IngestRequest):
-    archive_path = Path(request.file_path)
-    if not archive_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
+async def ingest(
+    batch_id: int = Form(...),
+    report_id: int = Form(...),
+    archive: UploadFile = File(...),
+):
     ensure_collection()
-    workdir = extract_zip(archive_path)
+    archive_path = await persist_upload(archive)
+    workdir: Path | None = None
     try:
+        workdir = extract_zip(archive_path)
         documents = load_documents(workdir)
         if not documents:
             raise HTTPException(status_code=400, detail="No PDF documents found")
@@ -114,7 +132,9 @@ async def ingest(request: IngestRequest):
         vectorstore.add_documents(documents)
         return {"chunks": len(documents)}
     finally:
-        cleanup_directory(workdir)
+        if workdir:
+            cleanup_directory(workdir)
+        cleanup_file(archive_path)
 
 
 @app.get("/health")
