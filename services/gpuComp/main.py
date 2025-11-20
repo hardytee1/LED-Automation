@@ -16,7 +16,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
-from docling_core.types import ExportType
+from langchain_docling.loader import ExportType
 from docling.chunking import HybridChunker
 
 load_dotenv()
