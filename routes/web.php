@@ -5,7 +5,6 @@ use App\Http\Controllers\Reports\ReferenceBatchController;
 use App\Http\Controllers\Reports\ReferenceBatchStatusController;
 use App\Http\Controllers\Reports\ReportController;
 use App\Http\Controllers\Reports\ReportOutputController;
-use App\Models\ReportOutput;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -29,7 +28,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('reports/{report}/generation-runs', [GenerationRunController::class, 'store'])
         ->name('reports.generation-runs.store');
     Route::post('reports/{report}/outputs/{type}', [ReportOutputController::class, 'store'])
-        ->whereIn('type', ReportOutput::supportedTypes())
         ->name('reports.outputs.store');
 });
 

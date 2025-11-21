@@ -1,0 +1,29 @@
+{
+  "payload": {
+    "summary": "Generated 0 penetapan entries with hyperlink mapping.",
+    "results": []
+  },
+  "meta": {
+    "generated_at": "2025-11-21T06:47:15.564100+00:00",
+    "job_key": "c92b8a9e-7b72-44bb-a24e-2cc73df3a0d1",
+    "report_id": 3,
+    "user_id": 4,
+    "output_type": "penetapan",
+    "document_collection": "cb12e1b0-fd32-454c-8ab6-02ab373aec23",
+    "allowed_orders": [
+      0,
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      35,
+      40
+    ],
+    "penetapan_records": 0,
+    "hyperlink_records": 0,
+    "total_links_processed": 0,
+    "chunks_returned": 0
+  }
+}

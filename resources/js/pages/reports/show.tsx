@@ -46,16 +46,21 @@ interface GenerationRun {
     error_message?: string | null;
 }
 
-interface ReportOutput {
-    id: number;
-    type: 'penetapan' | 'pelaksanaan';
-    status: string;
-    job_id?: string | null;
-    artifact_path?: string | null;
-    started_at?: string | null;
-    finished_at?: string | null;
-    error_message?: string | null;
-    created_at: string;
+interface ReportOutputSnapshot {
+    status?: string;
+    job_key?: string;
+    payload?: {
+        summary?: string;
+        results?: unknown;
+    } | null;
+    meta?: Record<string, unknown> | null;
+    error?: string | null;
+    requested_by?: {
+        id: number;
+        name: string;
+        email: string;
+    } | null;
+    updated_at?: string;
 }
 
 interface ReportDetail {
@@ -68,7 +73,8 @@ interface ReportDetail {
     sections: Section[];
     reference_batches: ReferenceBatch[];
     generation_runs: GenerationRun[];
-    outputs: ReportOutput[];
+    penetapan_json?: ReportOutputSnapshot | null;
+    pelaksanaan_json?: ReportOutputSnapshot | null;
 }
 
 interface Props {
@@ -112,6 +118,36 @@ export default function ReportShow({ report }: Props) {
     const [queueingBatchId, setQueueingBatchId] = useState<number | null>(null);
     const outputForm = useForm({});
     const [activeOutputType, setActiveOutputType] = useState<'penetapan' | 'pelaksanaan' | null>(null);
+
+    const renderOutputSnapshot = (label: string, snapshot?: ReportOutputSnapshot | null) => (
+        <div className="rounded-lg border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p className="font-semibold">{label}</p>
+                    <p className="text-xs text-muted-foreground">
+                        Updated {snapshot?.updated_at ? formatDateTime(snapshot.updated_at) : '—'}
+                    </p>
+                </div>
+                <Badge className={statusClass(snapshot?.status ?? 'not-started')} variant="outline">
+                    {snapshot?.status ?? 'not-started'}
+                </Badge>
+            </div>
+            {snapshot?.error && (
+                <p className="mt-3 text-sm text-destructive">{snapshot.error}</p>
+            )}
+            {snapshot?.payload?.summary && (
+                <p className="mt-3 text-sm text-muted-foreground">{snapshot.payload.summary}</p>
+            )}
+            {snapshot?.payload?.results && (
+                <pre className="mt-3 overflow-x-auto rounded-md bg-muted/40 p-3 text-xs">
+                    {JSON.stringify(snapshot.payload.results, null, 2)}
+                </pre>
+            )}
+            {!snapshot?.payload && !snapshot?.error && (
+                <p className="mt-3 text-sm text-muted-foreground">No output yet.</p>
+            )}
+        </div>
+    );
 
     const handleReferenceSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -186,7 +222,7 @@ export default function ReportShow({ report }: Props) {
                             <Button
                                 type="button"
                                 onClick={() => handleRetrieve('penetapan')}
-                                disabled={outputForm.processing}
+                                disabled={outputForm.processing && activeOutputType === 'penetapan'}
                             >
                                 {outputForm.processing && activeOutputType === 'penetapan'
                                     ? 'Retrieving…'
@@ -196,7 +232,7 @@ export default function ReportShow({ report }: Props) {
                                 type="button"
                                 variant="secondary"
                                 onClick={() => handleRetrieve('pelaksanaan')}
-                                disabled={outputForm.processing}
+                                disabled={outputForm.processing && activeOutputType === 'pelaksanaan'}
                             >
                                 {outputForm.processing && activeOutputType === 'pelaksanaan'
                                     ? 'Retrieving…'
@@ -405,43 +441,12 @@ export default function ReportShow({ report }: Props) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Retrieved outputs</CardTitle>
-                        <CardDescription>Penetapan & Pelaksanaan artifacts awaiting review</CardDescription>
+                        <CardDescription>Latest Penetapan & Pelaksanaan JSON snapshots</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            {report.outputs.length === 0 && (
-                                <p className="text-sm text-muted-foreground">No retrieval requests yet.</p>
-                            )}
-                            {report.outputs.map((output) => (
-                                <div key={output.id} className="rounded-lg border p-4">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div>
-                                            <p className="font-semibold capitalize">{output.type} output</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Requested {formatDateTime(output.created_at)}
-                                                {' '}• Started {formatDateTime(output.started_at)}
-                                                {' '}• Finished {formatDateTime(output.finished_at)}
-                                            </p>
-                                        </div>
-                                        <Badge className={statusClass(output.status)} variant="outline">
-                                            {output.status}
-                                        </Badge>
-                                    </div>
-                                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                                        <div>
-                                            <p className="text-xs uppercase text-muted-foreground">Job ID</p>
-                                            <p className="font-mono text-xs break-all">{output.job_id ?? '—'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs uppercase text-muted-foreground">Artifact</p>
-                                            <p className="text-xs break-all">{output.artifact_path ?? '—'}</p>
-                                        </div>
-                                    </dl>
-                                    {output.error_message && (
-                                        <p className="mt-3 text-sm text-destructive">{output.error_message}</p>
-                                    )}
-                                </div>
-                            ))}
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {renderOutputSnapshot('Penetapan', report.penetapan_json)}
+                            {renderOutputSnapshot('Pelaksanaan', report.pelaksanaan_json)}
                         </div>
                     </CardContent>
                 </Card>

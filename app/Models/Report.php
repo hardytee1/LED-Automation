@@ -18,6 +18,8 @@ class Report extends Model
         'metadata' => 'array',
         'last_generated_at' => 'datetime',
         'uuid' => 'string',
+        'penetapan_json' => 'array',
+        'pelaksanaan_json' => 'array',
     ];
 
     protected static function booted(): void
@@ -54,8 +56,4 @@ class Report extends Model
         return $this->hasMany(GenerationRun::class);
     }
 
-    public function outputs(): HasMany
-    {
-        return $this->hasMany(ReportOutput::class);
-    }
 }

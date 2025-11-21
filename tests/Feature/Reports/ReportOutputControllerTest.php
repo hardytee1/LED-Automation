@@ -2,7 +2,6 @@
 
 use App\Jobs\RetrieveReportOutput;
 use App\Models\Report;
-use App\Models\ReportOutput;
 use App\Models\User;
 use Illuminate\Support\Facades\Bus;
 
@@ -17,7 +16,7 @@ it('prevents users from triggering outputs they do not own', function () {
     actingAs($user)
         ->post(route('reports.outputs.store', [
             'report' => $report,
-            'type' => ReportOutput::TYPE_PENETAPAN,
+            'type' => 'penetapan',
         ]))
         ->assertForbidden();
 });
@@ -31,21 +30,20 @@ it('queues a report output retrieval job', function () {
     actingAs($user)
         ->post(route('reports.outputs.store', [
             'report' => $report,
-            'type' => ReportOutput::TYPE_PENETAPAN,
+            'type' => 'penetapan',
         ]))
         ->assertStatus(202)
         ->assertJsonStructure([
-            'output' => ['id', 'type', 'status', 'job_id', 'created_at'],
+            'status',
+            'job_key',
+            'type',
         ]);
 
-    $this->assertDatabaseHas('report_outputs', [
-        'report_id' => $report->id,
-        'type' => ReportOutput::TYPE_PENETAPAN,
-        'status' => ReportOutput::STATUS_QUEUED,
-    ]);
+    expect($report->fresh()->penetapan_json['status'] ?? null)
+        ->toEqual('queued');
 
     Bus::assertDispatched(RetrieveReportOutput::class, function (RetrieveReportOutput $job) use ($report) {
-        return $job->output->report_id === $report->id
-            && $job->output->type === ReportOutput::TYPE_PENETAPAN;
+        return $job->report->is($report)
+            && $job->type === 'penetapan';
     });
 });

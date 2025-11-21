@@ -23,12 +23,11 @@ POST {AUTOMATION_SERVICE_URL}/reports/{report_uuid}/outputs/{type}
 {
     "status": "completed",
     "payload": { "summary": "...", "results": [...] },
-    "artifact_path": "storage/outputs/report-12-penetapan.json",
     "meta": { "duration_ms": 4000 }
 }
 ```
 
-Return HTTP 202 while still processing or 200 when the JSON is ready. For failures, send a 4xx/5xx with an error body; Laravel will mark the output as failed.
+Return HTTP 202 while still processing or 200 when the JSON is ready. For failures, send a 4xx/5xx with an error body; Laravel will mark the report snapshot as failed.
 
 ## Environment Variables
 
@@ -74,7 +73,6 @@ async def retrieve_output(report_uuid: str, output_type: str, data: OutputReques
     return {
         "status": "completed",
         "payload": payload,
-        "artifact_path": f"outputs/{report_uuid}-{output_type}.json",
         "meta": {"duration_ms": 1500}
     }
 ```
@@ -96,9 +94,9 @@ uvicorn automation_service:app --host 127.0.0.1 --port 9000 --reload
 ## Workflow Recap
 
 1. User clicks *Retrieve Penetapan/Pelaksanaan* in the UI.
-2. Laravel creates a `report_outputs` record and dispatches `RetrieveReportOutput` to the `REPORT_OUTPUT_QUEUE`.
+2. Laravel dispatches `RetrieveReportOutput` to the `REPORT_OUTPUT_QUEUE` (no intermediate DB rows).
 3. The job POSTs to the FastAPI endpoint with the report UUID, type, and metadata.
-4. FastAPI processes the request, returns JSON payload and artifact path.
-5. Laravel updates the output record with status/payload for display or download.
+4. FastAPI processes the request and returns the JSON payload plus optional meta.
+5. Laravel stores the latest response JSON directly on the `reports` table for display.
 
 Extend the stub to stream progress, push artifacts to S3/local storage, or callback to Laravel if long-running work is required.

@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\ReportOutput;
+use App\Models\Report;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,31 +16,21 @@ class RetrieveReportOutput implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public ReportOutput $output, public string $jobKey)
-    {
+    public function __construct(
+        public Report $report,
+        public string $type,
+        public string $jobKey,
+        public array $metadata = []
+    ) {
         $this->onQueue(config('queue.report_outputs_queue', 'report-outputs'));
     }
 
     public function handle(): void
     {
-        $output = $this->output->fresh();
-        if (!$output) {
+        $report = $this->report->fresh();
+        if (!$report) {
             return;
         }
-
-        $output->loadMissing('report');
-        if (!$output->report) {
-            $output->update([
-                'status' => ReportOutput::STATUS_FAILED,
-                'error_message' => 'Report missing for output.',
-            ]);
-            return;
-        }
-
-        $output->update([
-            'status' => ReportOutput::STATUS_PROCESSING,
-            'started_at' => now(),
-        ]);
 
         try {
             $service = config('services.automation', []);
@@ -59,28 +49,24 @@ class RetrieveReportOutput implements ShouldQueue
             }
 
             $response = $request->post(
-                sprintf('%s/reports/%s/outputs/%s', $baseUrl, $output->report->uuid, $output->type),
+                sprintf('%s/reports/%s/outputs/%s', $baseUrl, $report->uuid, $this->type),
                 [
                     'job_key' => $this->jobKey,
-                    'report_id' => $output->report_id,
-                    'user_id' => $output->report->user_id,
-                    'metadata' => $output->metadata ?? [],
+                    'report_id' => $report->id,
+                    'user_id' => $report->user_id,
+                    'metadata' => $this->metadata,
                 ],
             );
 
             if ($response->failed()) {
-                $output->update([
-                    'status' => ReportOutput::STATUS_FAILED,
-                    'finished_at' => now(),
-                    'error_message' => sprintf(
-                        'Automation service error (%s): %s',
-                        $response->status(),
-                        $response->body(),
-                    ),
+                $this->markReport($report, [
+                    'status' => 'failed',
+                    'error' => sprintf('Automation service error (%s): %s', $response->status(), $response->body()),
                 ]);
 
                 Log::error('Automation service returned an error for report output.', [
-                    'output_id' => $output->id,
+                    'report_id' => $report->id,
+                    'type' => $this->type,
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -89,31 +75,46 @@ class RetrieveReportOutput implements ShouldQueue
             }
 
             $responsePayload = $response->json();
+            $outputPayload = Arr::get($responsePayload, 'payload', $responsePayload);
 
-            $output->update([
-                'status' => Arr::get($responsePayload, 'status', ReportOutput::STATUS_COMPLETED),
-                'payload' => Arr::get($responsePayload, 'payload'),
-                'artifact_path' => Arr::get($responsePayload, 'artifact_path', $output->artifact_path),
-                'metadata' => array_filter([
-                    ...($output->metadata ?? []),
-                    'service_meta' => Arr::get($responsePayload, 'meta'),
-                ], fn ($value) => $value !== null),
-                'finished_at' => now(),
-                'error_message' => null,
+            $this->markReport($report, [
+                'status' => Arr::get($responsePayload, 'status', 'completed'),
+                'payload' => $outputPayload,
+                'meta' => Arr::get($responsePayload, 'meta'),
             ]);
         } catch (\Throwable $throwable) {
             Log::error('Failed retrieving automation output.', [
-                'output_id' => $output->id,
+                'report_id' => $report->id,
+                'type' => $this->type,
                 'message' => $throwable->getMessage(),
             ]);
 
-            $output->update([
-                'status' => ReportOutput::STATUS_FAILED,
-                'finished_at' => now(),
-                'error_message' => $throwable->getMessage(),
+            $this->markReport($report, [
+                'status' => 'failed',
+                'error' => $throwable->getMessage(),
             ]);
 
             throw $throwable;
         }
+    }
+
+    protected function markReport(Report $report, array $data): void
+    {
+        $column = $this->type === 'penetapan' ? 'penetapan_json' : 'pelaksanaan_json';
+        $existing = (array) ($report->{$column} ?? []);
+
+        $snapshot = array_filter([
+            'requested_by' => $data['requested_by'] ?? ($existing['requested_by'] ?? null),
+            'status' => $data['status'] ?? ($existing['status'] ?? null),
+            'payload' => $data['payload'] ?? ($existing['payload'] ?? null),
+            'meta' => $data['meta'] ?? ($existing['meta'] ?? null),
+            'error' => $data['error'] ?? null,
+            'job_key' => $this->jobKey,
+            'updated_at' => now()->toISOString(),
+        ], fn ($value) => $value !== null && $value !== []);
+
+        $report->forceFill([
+            $column => $snapshot,
+        ])->save();
     }
 }
