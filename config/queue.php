@@ -107,6 +107,8 @@ return [
         'table' => 'job_batches',
     ],
 
+    'report_outputs_queue' => env('REPORT_OUTPUT_QUEUE', 'report-outputs'),
+
     /*
     |--------------------------------------------------------------------------
     | Failed Queue Jobs

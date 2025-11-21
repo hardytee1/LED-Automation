@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\GenerationRun;
 use App\Models\ReferenceBatch;
 use App\Models\Report;
+use App\Models\ReportOutput;
 use App\Models\ReportReference;
 use App\Models\ReportSection;
 use App\Models\User;
@@ -52,6 +53,11 @@ class DatabaseSeeder extends Seeder
                 ->count(2)
                 ->for($report)
                 ->for($user, 'triggeredBy')
+                ->create();
+
+            ReportOutput::factory()
+                ->count(2)
+                ->for($report)
                 ->create();
         }
     }

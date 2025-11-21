@@ -53,4 +53,9 @@ class Report extends Model
     {
         return $this->hasMany(GenerationRun::class);
     }
+
+    public function outputs(): HasMany
+    {
+        return $this->hasMany(ReportOutput::class);
+    }
 }

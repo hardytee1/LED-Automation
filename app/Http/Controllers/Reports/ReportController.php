@@ -69,6 +69,7 @@ class ReportController extends Controller
             'sections' => fn ($query) => $query->orderBy('sequence'),
             'referenceBatches.uploadedBy',
             'generationRuns' => fn ($query) => $query->latest(),
+            'outputs' => fn ($query) => $query->latest(),
         ])->loadCount(['references']);
 
         return Inertia::render('reports/show', [
@@ -106,6 +107,17 @@ class ReportController extends Controller
                     'finished_at' => $run->finished_at,
                     'summary' => $run->summary,
                     'error_message' => $run->error_message,
+                ]),
+                'outputs' => $report->outputs->map(fn ($output) => [
+                    'id' => $output->id,
+                    'type' => $output->type,
+                    'status' => $output->status,
+                    'job_id' => $output->job_id,
+                    'artifact_path' => $output->artifact_path,
+                    'started_at' => $output->started_at,
+                    'finished_at' => $output->finished_at,
+                    'error_message' => $output->error_message,
+                    'created_at' => $output->created_at,
                 ]),
             ],
         ]);

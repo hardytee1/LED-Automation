@@ -46,4 +46,10 @@ return [
         'timeout' => (int) env('GPU_SERVICE_TIMEOUT', 120),
     ],
 
+    'automation' => [
+        'url' => env('AUTOMATION_SERVICE_URL', env('RAG_SERVICE_URL', 'http://127.0.0.1:9000')),
+        'token' => env('AUTOMATION_SERVICE_TOKEN'),
+        'timeout' => (int) env('AUTOMATION_SERVICE_TIMEOUT', 180),
+    ],
+
 ];

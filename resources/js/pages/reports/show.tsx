@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import reports from '@/routes/reports';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { type FormEvent, useState } from 'react';
 
 interface Section {
@@ -46,6 +46,18 @@ interface GenerationRun {
     error_message?: string | null;
 }
 
+interface ReportOutput {
+    id: number;
+    type: 'penetapan' | 'pelaksanaan';
+    status: string;
+    job_id?: string | null;
+    artifact_path?: string | null;
+    started_at?: string | null;
+    finished_at?: string | null;
+    error_message?: string | null;
+    created_at: string;
+}
+
 interface ReportDetail {
     id: number;
     name: string;
@@ -56,6 +68,7 @@ interface ReportDetail {
     sections: Section[];
     reference_batches: ReferenceBatch[];
     generation_runs: GenerationRun[];
+    outputs: ReportOutput[];
 }
 
 interface Props {
@@ -73,6 +86,8 @@ const statusClass = (status: string) => {
             return 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-100';
         case 'running':
         case 'pending':
+        case 'queued':
+        case 'processing':
             return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-100';
         default:
             return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-100';
@@ -95,6 +110,8 @@ export default function ReportShow({ report }: Props) {
     const runForm = useForm<{ instructions: string }>({ instructions: '' });
     const queueForm = useForm({});
     const [queueingBatchId, setQueueingBatchId] = useState<number | null>(null);
+    const outputForm = useForm({});
+    const [activeOutputType, setActiveOutputType] = useState<'penetapan' | 'pelaksanaan' | null>(null);
 
     const handleReferenceSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -135,6 +152,22 @@ export default function ReportShow({ report }: Props) {
         );
     };
 
+    const handleRetrieve = (mode: 'penetapan' | 'pelaksanaan') => {
+        if (outputForm.processing) {
+            return;
+        }
+
+        outputForm.post(
+            reports.outputs.store({ report: report.id, type: mode }).url,
+            {
+                preserveScroll: true,
+                onStart: () => setActiveOutputType(mode),
+                onFinish: () => setActiveOutputType(null),
+                onSuccess: () => router.reload({ only: ['report'] }),
+            }
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={report.name} />
@@ -145,13 +178,34 @@ export default function ReportShow({ report }: Props) {
                         <h1 className="text-3xl font-semibold">{report.name}</h1>
                         <p className="text-sm text-muted-foreground">{report.program_name}</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <Badge className={statusClass(report.status)} variant="outline">
                             {report.status}
                         </Badge>
-                        <Button variant="outline" asChild>
-                            <Link href={reports.index().url}>Back to list</Link>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                type="button"
+                                onClick={() => handleRetrieve('penetapan')}
+                                disabled={outputForm.processing}
+                            >
+                                {outputForm.processing && activeOutputType === 'penetapan'
+                                    ? 'Retrieving…'
+                                    : 'Retrieve Penetapan'}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => handleRetrieve('pelaksanaan')}
+                                disabled={outputForm.processing}
+                            >
+                                {outputForm.processing && activeOutputType === 'pelaksanaan'
+                                    ? 'Retrieving…'
+                                    : 'Retrieve Pelaksanaan'}
+                            </Button>
+                            <Button variant="outline" asChild>
+                                <Link href={reports.index().url}>Back to list</Link>
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -347,6 +401,50 @@ export default function ReportShow({ report }: Props) {
                         </CardContent>
                     </Card>
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Retrieved outputs</CardTitle>
+                        <CardDescription>Penetapan & Pelaksanaan artifacts awaiting review</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            {report.outputs.length === 0 && (
+                                <p className="text-sm text-muted-foreground">No retrieval requests yet.</p>
+                            )}
+                            {report.outputs.map((output) => (
+                                <div key={output.id} className="rounded-lg border p-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <p className="font-semibold capitalize">{output.type} output</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Requested {formatDateTime(output.created_at)}
+                                                {' '}• Started {formatDateTime(output.started_at)}
+                                                {' '}• Finished {formatDateTime(output.finished_at)}
+                                            </p>
+                                        </div>
+                                        <Badge className={statusClass(output.status)} variant="outline">
+                                            {output.status}
+                                        </Badge>
+                                    </div>
+                                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <p className="text-xs uppercase text-muted-foreground">Job ID</p>
+                                            <p className="font-mono text-xs break-all">{output.job_id ?? '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase text-muted-foreground">Artifact</p>
+                                            <p className="text-xs break-all">{output.artifact_path ?? '—'}</p>
+                                        </div>
+                                    </dl>
+                                    {output.error_message && (
+                                        <p className="mt-3 text-sm text-destructive">{output.error_message}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardHeader>
