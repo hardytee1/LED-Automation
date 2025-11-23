@@ -441,10 +441,25 @@ def build_pelaksanaan_output(report_uuid: str, metadata: dict | None) -> tuple[d
         metadata.get("pelaksanaan_allowed_orders") or metadata.get("allowed_orders"),
         DEFAULT_PELAKSANAAN_ALLOWED_ORDERS,
     )
+    section_collections_override = metadata.get("pelaksanaan_section_collections") or metadata.get("section_collections")
     section_collections = _coerce_section_collections(
-        metadata.get("pelaksanaan_section_collections") or metadata.get("section_collections"),
+        section_collections_override,
         DEFAULT_PELAKSANAAN_SECTION_COLLECTIONS,
     )
+    target_new_collection = str(
+        metadata.get("pelaksanaan_new_collection")
+        or metadata.get("pelaksanaan_new_reference_collection")
+        or metadata.get("new_reference_collection")
+        or report_uuid
+    )
+    adjusted_section_collections: Dict[int, Tuple[str, str]] = {}
+    for index, (reference_collection, new_collection) in section_collections.items():
+        if section_collections_override:
+            effective_new_collection = new_collection or target_new_collection
+        else:
+            effective_new_collection = target_new_collection
+        adjusted_section_collections[index] = (reference_collection, effective_new_collection)
+    section_collections = adjusted_section_collections
     include_debug = bool(metadata.get("include_debug"))
     reference_top_k = _coerce_positive_int(
         metadata.get("reference_top_k") or metadata.get("pelaksanaan_reference_top_k"),
