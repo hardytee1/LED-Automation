@@ -300,7 +300,8 @@ def _extract_nested_reference_candidate(retrieval_results: List[dict]) -> dict |
             content = nested.get("page_content") or nested.get("content")
             if not content:
                 continue
-                filename = nested.get("filename") or nested.get("source") or nested.get("document_id")
+            filename = nested.get("filename") or nested.get("source") or nested.get("document_id")
+            filename = filename or ""
             return {
                 "content": content,
                 "filename": filename,
