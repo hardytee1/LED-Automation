@@ -22,7 +22,10 @@ class RetrieveReportOutput implements ShouldQueue
         public string $jobKey,
         public array $metadata = []
     ) {
-        $this->onQueue(config('queue.report_outputs_queue', 'report-outputs'));
+        $connection = config('queue.report_outputs_connection', config('queue.default'));
+        $queueName = config('queue.report_outputs_queue', 'report-outputs');
+
+        $this->onConnection($connection)->onQueue($queueName);
     }
 
     public function handle(): void

@@ -36,8 +36,18 @@ Configure the Laravel app:
 ```
 AUTOMATION_SERVICE_URL=http://127.0.0.1:9000
 AUTOMATION_SERVICE_TOKEN=optional-shared-secret
-AUTOMATION_SERVICE_TIMEOUT=240
-REPORT_OUTPUT_QUEUE=penetapan
+AUTOMATION_SERVICE_TIMEOUT=600
+REPORT_OUTPUT_QUEUE=report-outputs
+REPORT_OUTPUT_QUEUE_CONNECTION=report_outputs
+REPORT_OUTPUT_QUEUE_DRIVER=database
+REPORT_OUTPUT_QUEUE_DB_CONNECTION=mysql
+REPORT_OUTPUT_QUEUE_RETRY_AFTER=660
+```
+
+Then run a dedicated worker so long-running Pelaksanaan pipelines do not block default jobs:
+
+```
+php artisan queue:work report_outputs --queue=report-outputs --timeout=0 --tries=1
 ```
 
 ## Local FastAPI Stub

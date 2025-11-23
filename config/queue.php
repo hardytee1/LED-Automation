@@ -73,6 +73,33 @@ return [
             'after_commit' => false,
         ],
 
+        'report_outputs' => (function () {
+            $driver = env('REPORT_OUTPUT_QUEUE_DRIVER', 'database');
+            $queueName = env('REPORT_OUTPUT_QUEUE', 'report-outputs');
+            $automationTimeout = (int) env('AUTOMATION_SERVICE_TIMEOUT', 180);
+            $retryAfter = (int) env('REPORT_OUTPUT_QUEUE_RETRY_AFTER', $automationTimeout + 60);
+
+            if ($driver === 'redis') {
+                return [
+                    'driver' => 'redis',
+                    'connection' => env('REPORT_OUTPUT_QUEUE_REDIS_CONNECTION', env('REDIS_QUEUE_CONNECTION', 'default')),
+                    'queue' => $queueName,
+                    'retry_after' => $retryAfter,
+                    'block_for' => null,
+                    'after_commit' => false,
+                ];
+            }
+
+            return [
+                'driver' => 'database',
+                'connection' => env('REPORT_OUTPUT_QUEUE_DB_CONNECTION', env('DB_QUEUE_CONNECTION')),
+                'table' => env('REPORT_OUTPUT_QUEUE_TABLE', env('DB_QUEUE_TABLE', 'jobs')),
+                'queue' => $queueName,
+                'retry_after' => $retryAfter,
+                'after_commit' => false,
+            ];
+        })(),
+
         'deferred' => [
             'driver' => 'deferred',
         ],
@@ -107,6 +134,7 @@ return [
         'table' => 'job_batches',
     ],
 
+    'report_outputs_connection' => env('REPORT_OUTPUT_QUEUE_CONNECTION', 'report_outputs'),
     'report_outputs_queue' => env('REPORT_OUTPUT_QUEUE', 'report-outputs'),
 
     /*
