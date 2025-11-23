@@ -61,10 +61,13 @@ DEFAULT_PELAKSANAAN_SECTION_COLLECTIONS: Dict[int, Tuple[str, str]] = {
 PELAKSANAAN_REFERENCE_TOP_K = int(os.getenv("PELAKSANAAN_REFERENCE_TOP_K", "1"))
 PELAKSANAAN_NESTED_TOP_K = int(os.getenv("PELAKSANAAN_NESTED_TOP_K", "1"))
 
-if not QDRANT_URL or not QDRANT_API_KEY:
-    raise RuntimeError("QDRANT_URL and QDRANT_API_KEY must be set")
+if not QDRANT_URL:
+    raise RuntimeError("QDRANT_URL must be set")
 
-qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+if not QDRANT_API_KEY:
+    logger.warning("QDRANT_API_KEY is not set; assuming local Qdrant without authentication")
+
+qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
 
 
 @lru_cache(maxsize=1)

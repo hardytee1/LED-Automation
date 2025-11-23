@@ -31,11 +31,14 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_DISTANCE = os.getenv("QDRANT_DISTANCE", "COSINE").upper()
 
-if not QDRANT_URL or not QDRANT_API_KEY:
-    raise RuntimeError("QDRANT_URL and QDRANT_API_KEY must be set")
+if not QDRANT_URL:
+    raise RuntimeError("QDRANT_URL must be set")
+
+if not QDRANT_API_KEY:
+    logger.warning("QDRANT_API_KEY is not set; assuming local Qdrant without authentication")
 
 embedding_model = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
 
 VECTOR_SIZE = len(embedding_model.embed_query("dimension probe"))
 
