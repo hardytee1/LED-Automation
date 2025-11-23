@@ -300,12 +300,10 @@ def _extract_nested_reference_candidate(retrieval_results: List[dict]) -> dict |
             content = nested.get("page_content") or nested.get("content")
             if not content:
                 continue
-            filename = nested.get("filename") or nested.get("source") or nested.get("document_id")
-            source_path = nested.get("source_path") or nested.get("source") or nested.get("document_id")
+                filename = nested.get("filename") or nested.get("source") or nested.get("document_id")
             return {
                 "content": content,
                 "filename": filename,
-                "source_path": source_path,
             }
     return None
 
@@ -617,8 +615,7 @@ def build_pelaksanaan_output(report_uuid: str, metadata: dict | None) -> tuple[d
                 filename = None
                 if isinstance(origin, dict):
                     filename = origin.get("filename")
-                source_path = nested_meta.get("source") or nested_meta.get("document_id")
-                filename = filename or source_path
+                filename = filename or nested_meta.get("source") or nested_meta.get("document_id")
                 headings = None
                 if isinstance(dl_meta, dict):
                     headings = dl_meta.get("headings")
@@ -627,7 +624,6 @@ def build_pelaksanaan_output(report_uuid: str, metadata: dict | None) -> tuple[d
                     {
                         "page_content": nested_doc.page_content,
                         "filename": filename,
-                        "source_path": source_path,
                         "headings": headings,
                         "score": nested_score,
                     }
@@ -695,7 +691,7 @@ def build_pelaksanaan_output(report_uuid: str, metadata: dict | None) -> tuple[d
         heading = ""
         past_narrative = ""
         new_references: List[dict] = []
-        seen_references: set[tuple[str, str | None, str | None]] = set()
+        seen_references: set[tuple[str, str | None]] = set()
 
         for item in items:
             chunk_heading = item.get("found_in_chunk", {}).get("heading")
@@ -703,7 +699,7 @@ def build_pelaksanaan_output(report_uuid: str, metadata: dict | None) -> tuple[d
                 heading = chunk_heading
             candidate = _extract_nested_reference_candidate(item.get("retrieval_search_result") or [])
             if candidate:
-                key = (candidate["content"], candidate.get("filename"), candidate.get("source_path"))
+                key = (candidate["content"], candidate.get("filename"))
                 if key not in seen_references:
                     new_references.append(candidate)
                     seen_references.add(key)
