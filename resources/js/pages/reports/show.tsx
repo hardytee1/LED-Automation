@@ -230,7 +230,6 @@ export default function ReportShow({ report }: Props) {
                             </Button>
                             <Button
                                 type="button"
-                                variant="secondary"
                                 onClick={() => handleRetrieve('pelaksanaan')}
                                 disabled={outputForm.processing && activeOutputType === 'pelaksanaan'}
                             >
