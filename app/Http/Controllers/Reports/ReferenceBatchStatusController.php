@@ -11,7 +11,7 @@ class ReferenceBatchStatusController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $token = config('services.rag.webhook_token');
+        $token = config('services.gpu.token');
 
         if ($token && ! hash_equals($token, (string) $request->bearerToken())) {
             abort(401, 'Unauthorized');

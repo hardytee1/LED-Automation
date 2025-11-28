@@ -64,7 +64,7 @@ class ProcessReferenceBatch implements ShouldQueue
 
         try {
             $gpuConfig = config('services.gpu', []);
-            $gpuServiceUrl = rtrim((string) data_get($gpuConfig, 'url', config('services.rag.url', 'http://127.0.0.1:8000')), '/');
+            $gpuServiceUrl = rtrim((string) data_get($gpuConfig, 'url', 'http://127.0.0.1:9001'), '/');
             $timeout = (int) data_get($gpuConfig, 'timeout', 120);
             $token = data_get($gpuConfig, 'token');
 
